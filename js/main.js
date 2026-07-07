@@ -20,7 +20,7 @@
   document.querySelectorAll('.nav-links a').forEach(a => {
     if (a.getAttribute('href') === currentPath ||
         (currentPath.endsWith(a.getAttribute('href').split('/').pop()) &&
-         a.getAttribute('href') !== '/altj/')) {
+         a.getAttribute('href') !== '/')) {
       a.classList.add('active');
     }
   });
