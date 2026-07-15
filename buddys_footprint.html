@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buddy's | Standard | Overlay Analysis</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root {
+    --buddys: #e74c3c; --standard: #3498db; --aarons: #f59e0b; --rac: #16a34a; --arona: #06b6d4; --majik: #ec4899; --other: #a855f7;
+    --overlap: #c9a84c; --bg: #0d1626; --panel: #1a2b50; --panel2: #243460;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #c9a84c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+  #app { display: grid; grid-template-columns: 370px 1fr; height: 100vh; }
+  @media (max-width: 900px) { #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } }
+
+  #sidebar { background: var(--panel); overflow-y: auto; border-right: 1px solid rgba(255,255,255,0.08); }
+  .sidebar-inner { padding: 16px; }
+  .logo { font-size: 16px; font-weight: 700; margin-bottom: 2px; display: flex; align-items: center; gap: 8px; }
+  .logo span { color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: 11px; margin-bottom: 16px; line-height: 1.4; }
+  
+  .section { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .section:last-child { border-bottom: none; }
+  .section h2 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 8px; font-weight: 700; }
+
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+  .stat-grid.two-col { grid-template-columns: 1fr 1fr; }
+  .stat { background: var(--panel2); padding: 8px 10px; border-radius: 6px; }
+  .stat .v { font-size: 17px; font-weight: 700; color: var(--accent); }
+  .stat .l { font-size: 9px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  .toggle { display: flex; align-items: center; padding: 7px 10px; border-radius: 6px; cursor: pointer; 
+            background: var(--panel2); margin-bottom: 4px; transition: opacity 0.15s; font-size: 12px; user-select: none; }
+  .toggle.off { opacity: 0.3; }
+  .toggle .dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+  .toggle .label { flex: 1; font-weight: 500; }
+  .toggle .count { color: var(--muted); font-size: 11px; font-weight: 600; }
+  .toggle-sub { font-size: 10px; color: var(--muted); padding-left: 28px; margin-top: -2px; margin-bottom: 4px; }
+  .toggle-group { border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 4px; margin-top: 4px; }
+  .toggle-group .toggle-children { max-height: 300px; overflow-y: auto; padding-left: 8px; margin-top: 2px; }
+  .toggle-group .toggle-children.collapsed { display: none; }
+  .toggle-group .toggle-parent { background: var(--panel); border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .toggle-group .toggle-parent .caret { font-size: 9px; color: var(--muted); margin-left: 4px; transition: transform 0.2s; }
+  .toggle-group .toggle-parent .caret.open { transform: rotate(90deg); }
+
+  .overlap-list { max-height: 280px; overflow-y: auto; }
+  .overlap-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; 
+                   background: var(--panel2); border-radius: 6px; margin-bottom: 3px; font-size: 12px; cursor: pointer; transition: background 0.15s; }
+  .overlap-item:hover { background: rgba(201,168,76,0.18); }
+  .overlap-item .st { font-weight: 700; color: var(--accent); min-width: 28px; }
+  .overlap-item .badges { display: flex; gap: 4px; }
+  .badge { display: inline-block; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 700; color: #fff; }
+  .badge-b { background: var(--buddys); }
+  .badge-s { background: var(--standard); }
+  .badge-a { background: var(--aarons); }
+  .badge-r { background: var(--rac); }
+
+  #search { width: 100%; padding: 8px 10px; background: var(--panel2); border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text); border-radius: 6px; font-size: 12px; outline: none; }
+  #search:focus { border-color: var(--accent); }
+
+  .insight { font-size: 11px; color: var(--muted); line-height: 1.5; padding: 10px; background: var(--panel2); border-radius: 6px; border-left: 3px solid var(--accent); }
+  .insight strong { color: var(--accent); }
+
+  #map { width: 100%; height: 100%; }
+
+  .leaflet-popup-content-wrapper { background: var(--panel); color: var(--text); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+  .leaflet-popup-tip { background: var(--panel); }
+  .leaflet-popup-content { font-size: 13px; line-height: 1.5; margin: 10px 14px; }
+  .popup-title { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+  .popup-addr { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  .popup-tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; margin-top: 4px; }
+  .popup-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 6px; font-size: 11px; }
+  .popup-stat { background: rgba(255,255,255,0.06); padding: 4px 7px; border-radius: 4px; }
+  .popup-stat b { color: var(--accent); }
+
+  .legend { position: absolute; bottom: 20px; right: 20px; background: rgba(13,22,38,0.92); padding: 12px 14px; 
+            border-radius: 8px; z-index: 1000; border: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: var(--text); }
+  .legend-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  @media (max-width: 900px) { #sidebar { max-height: 45vh; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div class="sidebar-inner">
+      <div class="logo"><span>Δ</span> Buddy's | Standard | Overlay Analysis</div>
+      <div class="subtitle">Buddy's Home Furnishings × Standard Communities × Competitive Landscape<br>Real location data sourced from Google Maps</div>
+
+      <div class="section">
+        <h2>Portfolio Snapshot</h2>
+        <div class="stat-grid">
+          <div class="stat"><div class="v" id="s-buddys">—</div><div class="l">Buddy's Stores</div></div>
+          <div class="stat"><div class="v" id="s-standard">—</div><div class="l">Std Communities</div></div>
+          <div class="stat"><div class="v" id="s-units">—</div><div class="l">Apartment Units</div></div>
+        </div>
+        <div class="stat-grid two-col" style="margin-top:5px">
+          <div class="stat"><div class="v" id="s-overlap">—</div><div class="l">Overlap States</div></div>
+          <div class="stat"><div class="v" id="s-states">—</div><div class="l">Total Footprint</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Competitive Landscape</h2>
+        <div class="stat-grid two-col">
+          <div class="stat"><div class="v" id="s-total-comp">—</div><div class="l">Total Competitors</div></div>
+          <div class="stat"><div class="v" id="s-brands">—</div><div class="l">Brands Tracked</div></div>
+        </div>
+        <div id="brand-stats" style="margin-top:5px"></div>
+      </div>
+
+      <div class="section">
+        <h2>Map Layers <span style="font-weight:400;font-size:9px;color:var(--muted);text-transform:none;letter-spacing:0">click to show/hide</span></h2>
+        <div class="toggle" data-layer="buddys"><div class="dot" style="background:var(--buddys)"></div><div class="label">Buddy's Home Furnishings</div><div class="count" id="c-buddys"></div></div>
+        <div class="toggle" data-layer="standard"><div class="dot" style="background:var(--standard)"></div><div class="label">Standard Communities</div><div class="count" id="c-standard"></div></div>
+        <div id="brand-toggles-major"></div>
+        <div class="toggle-group" id="other-group">
+          <div class="toggle toggle-parent" id="other-parent">
+            <div class="dot" style="background:var(--other)"></div>
+            <div class="label">Other RTO</div>
+            <div class="count" id="c-other-total"></div>
+            <span class="caret open">&#9654;</span>
+          </div>
+          <div class="toggle-children" id="brand-toggles-other"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Top Market Opportunities</h2>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:6px;line-height:1.4">Ranked by opportunity score: <strong style="color:var(--text)">units × properties</strong>, with a <strong style="color:var(--accent)">1.5× boost</strong> for markets where Buddy's already operates. <span style="color:var(--accent)">Gold</span> = Buddy's in state. <span style="color:var(--buddys)">●</span> = overlap market.</div>
+        <div class="overlap-list" id="top-markets"></div>
+      </div>
+
+      <div class="section">
+        <h2>Overlap Markets</h2>
+        <div class="overlap-list" id="overlap-list"></div>
+      </div>
+
+      <div class="section">
+        <h2>Search</h2>
+        <input id="search" type="text" placeholder="Search store, property, city, or state…">
+      </div>
+
+      <div class="section">
+        <div class="insight">
+          States where both Buddy's and Standard Communities operate represent 
+          <strong>natural synergy markets</strong> — Buddy's RTO customers live in the same 
+          communities as Standard's apartment residents. These overlaps are the core of Alt+J's 
+          thesis: <strong>invest in the companies that sustain communities</strong>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map', { zoomControl: true }).setView([34.5, -90], 5);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 18
+}).addTo(map);
+
+const layers = {};
+const layerVisible = { buddys: true, standard: true };
+let allMarkers = [];
+
+fetch('/assets/map-data.json')
+  .then(r => r.json())
+  .then(data => {
+    const { buddys, standard, competitors } = data;
+    // Dynamic brand detection
+    const brandMap = {};
+    competitors.forEach(c => {
+      if(!brandMap[c.brand]) brandMap[c.brand] = [];
+      brandMap[c.brand].push(c);
+    });
+    const brandNames = Object.keys(brandMap).sort((a,b) => brandMap[b].length - brandMap[a].length);
+
+    // 27 distinct colors for RTO brands — ordered by visual separation
+    const BRAND_COLORS = [
+      '#f59e0b', '#16a34a', '#06b6d4', '#ec4899', '#a855f7', '#ef4444',
+      '#14b8a6', '#f97316', '#8b5cf6', '#22c55e', '#0ea5e9', '#e11d48',
+      '#84cc16', '#d946ef', '#64748b', '#facc15', '#fb923c', '#4ade80',
+      '#38bdf8', '#c084fc', '#fbbf24', '#34d399', '#f472b6', '#a3e635',
+      '#2dd4bf', '#818cf8', '#fb7185'
+    ];
+    const brandColor = {};
+    brandNames.forEach((b, i) => { brandColor[b] = BRAND_COLORS[i % BRAND_COLORS.length]; });
+
+    // Compute states
+    const bStates = new Set(), sStates = new Set();
+    buddys.forEach(b => { const m = (b.address||'').match(/,\s*([A-Z]{2})\s+\d/); if(m) bStates.add(m[1]); });
+    standard.forEach(s => { if(s.state) sStates.add(s.state.toUpperCase()); });
+    const overlap = [...bStates].filter(s => sStates.has(s)).sort();
+    const allStates = new Set([...bStates, ...sStates]);
+    const totalUnits = standard.reduce((a,s) => a + (s.units||0), 0);
+
+    // Stats
+    document.getElementById('s-buddys').textContent = buddys.length;
+    document.getElementById('s-standard').textContent = standard.length;
+    document.getElementById('s-units').textContent = totalUnits.toLocaleString();
+    document.getElementById('s-overlap').textContent = overlap.length;
+    document.getElementById('s-states').textContent = allStates.size + ' states';
+    document.getElementById('s-total-comp').textContent = competitors.length;
+    document.getElementById('s-brands').textContent = brandNames.length;
+    document.getElementById('c-buddys').textContent = buddys.length;
+    document.getElementById('c-standard').textContent = standard.length;
+
+    // Build brand stats grid dynamically
+    const statsEl = document.getElementById('brand-stats');
+    const statGrid = document.createElement('div');
+    statGrid.className = 'stat-grid';
+    statGrid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    brandNames.slice(0, 9).forEach(b => {
+      const d = document.createElement('div');
+      d.className = 'stat';
+      d.innerHTML = `<div class="v" style="color:${brandColor[b]};font-size:14px">${brandMap[b].length}</div><div class="l" style="font-size:8px">${b}</div>`;
+      statGrid.appendChild(d);
+    });
+    statsEl.appendChild(statGrid);
+
+    // Split brands into major (Aaron's, RAC) and other
+    const majorBrands = ["Aaron's", "Rent-A-Center"];
+    const majorNames = brandNames.filter(b => majorBrands.includes(b));
+    const otherNames = brandNames.filter(b => !majorBrands.includes(b));
+    const otherTotal = otherNames.reduce((sum, b) => sum + brandMap[b].length, 0);
+
+    // Major brand toggles
+    const majorEl = document.getElementById('brand-toggles-major');
+    majorNames.forEach(b => {
+      const key = 'brand_' + b.replace(/[^a-zA-Z0-9]/g, '_');
+      layerVisible[key] = true;
+      const div = document.createElement('div');
+      div.className = 'toggle';
+      div.dataset.layer = key;
+      div.innerHTML = `<div class="dot" style="background:${brandColor[b]}"></div><div class="label">${b}</div><div class="count">${brandMap[b].length}</div>`;
+      majorEl.appendChild(div);
+    });
+
+    // Other brand toggles (inside collapsible group)
+    const otherEl = document.getElementById('brand-toggles-other');
+    document.getElementById('c-other-total').textContent = otherTotal;
+    let otherGroupVisible = true;
+
+    otherNames.forEach(b => {
+      const key = 'brand_' + b.replace(/[^a-zA-Z0-9]/g, '_');
+      layerVisible[key] = true;
+      const div = document.createElement('div');
+      div.className = 'toggle';
+      div.dataset.layer = key;
+      div.style.fontSize = '11px';
+      div.innerHTML = `<div class="dot" style="background:${brandColor[b]}"></div><div class="label">${b}</div><div class="count">${brandMap[b].length}</div>`;
+      otherEl.appendChild(div);
+    });
+
+    // Parent toggle: show/hide ALL other brands at once
+    document.getElementById('other-parent').addEventListener('click', (e) => {
+      // If clicking the caret area, toggle collapse
+      const caret = document.querySelector('#other-parent .caret');
+      const children = document.getElementById('brand-toggles-other');
+      
+      // Toggle all other layers on/off
+      otherGroupVisible = !otherGroupVisible;
+      document.getElementById('other-parent').classList.toggle('off');
+      
+      otherNames.forEach(b => {
+        const key = 'brand_' + b.replace(/[^a-zA-Z0-9]/g, '_');
+        layerVisible[key] = otherGroupVisible;
+        if(otherGroupVisible) {
+          layers[key].addTo(map);
+        } else {
+          map.removeLayer(layers[key]);
+        }
+        // Update individual toggle appearance
+        const toggle = otherEl.querySelector(`[data-layer="${key}"]`);
+        if(toggle) toggle.classList.toggle('off', !otherGroupVisible);
+      });
+    });
+
+    // Caret: expand/collapse the children list
+    document.querySelector('#other-parent .caret').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const children = document.getElementById('brand-toggles-other');
+      const caret = e.target;
+      children.classList.toggle('collapsed');
+      caret.classList.toggle('open');
+    });
+
+    // Top Market Opportunities — group Standard by city_state, rank by property count
+    const marketMap = {};
+    standard.forEach(s => {
+      const key = (s.city_state || s.state || '').trim();
+      if(!key) return;
+      if(!marketMap[key]) marketMap[key] = { name: key, state: s.state, props: 0, units: 0, lats: [], lngs: [] };
+      marketMap[key].props++;
+      marketMap[key].units += (s.units || 0);
+      marketMap[key].lats.push(s.lat);
+      marketMap[key].lngs.push(s.lng);
+    });
+    // Score = units * props * (1.5 if Buddy's in state, 1.0 if not)
+    const bStatesSet = bStates;
+    Object.values(marketMap).forEach(mkt => {
+      const inBuddysState = mkt.state && bStatesSet.has(mkt.state.toUpperCase());
+      mkt.hasBuddys = inBuddysState;
+      mkt.score = mkt.units * mkt.props * (inBuddysState ? 1.5 : 1.0);
+    });
+    const topMarkets = Object.values(marketMap).sort((a,b) => b.score - a.score);
+    const tmEl = document.getElementById('top-markets');
+    topMarkets.forEach((mkt, i) => {
+      const hasBuddys = mkt.hasBuddys;
+      const div = document.createElement('div');
+      div.className = 'overlap-item';
+      div.innerHTML = `<span style="min-width:20px;font-size:10px;color:var(--muted);font-weight:600">${i+1}</span><span style="flex:1"><span style="font-weight:700;color:${hasBuddys ? 'var(--accent)' : 'var(--text)'}">${mkt.name}</span></span>` +
+        `<span class="badges">` +
+        `<span class="badge badge-s" title="${mkt.props} properties">${mkt.props} prop</span>` +
+        `<span style="font-size:10px;color:var(--muted)" title="Total units">${mkt.units.toLocaleString()} u</span>` +
+        (hasBuddys ? '<span style="font-size:9px;color:var(--buddys);margin-left:2px" title="Buddy\'s in this state">●</span>' : '') +
+        `</span>`;
+      div.onclick = () => {
+        const pts = mkt.lats.map((lat,j) => [lat, mkt.lngs[j]]);
+        if(pts.length === 1) map.setView(pts[0], 12);
+        else map.fitBounds(L.latLngBounds(pts).pad(0.3));
+      };
+      tmEl.appendChild(div);
+    });
+
+    // Overlap list
+    const olEl = document.getElementById('overlap-list');
+    overlap.forEach(st => {
+      const bCount = buddys.filter(b => (b.address||'').includes(', ' + st + ' ')).length;
+      const sCount = standard.filter(s => s.state && s.state.toUpperCase() === st).length;
+      const sUnits = standard.filter(s => s.state && s.state.toUpperCase() === st).reduce((a,s)=>a+(s.units||0),0);
+      const compCount = competitors.filter(c => c.state && c.state.toUpperCase() === st).length;
+      
+      const div = document.createElement('div');
+      div.className = 'overlap-item';
+      div.innerHTML = `<span class="st">${st}</span><span class="badges">` +
+        `<span class="badge badge-b" title="Buddy's">${bCount}</span>` +
+        `<span class="badge badge-s" title="Standard (${sUnits.toLocaleString()} units)">${sCount}</span>` +
+        `<span style="font-size:10px;color:var(--muted)" title="Competitors">${compCount} comp</span></span>`;
+      div.onclick = () => {
+        const pts = [
+          ...buddys.filter(b=>(b.address||'').includes(', '+st+' ')).map(b=>[b.lat,b.lng]),
+          ...standard.filter(s=>s.state && s.state.toUpperCase()===st).map(s=>[s.lat,s.lng])
+        ];
+        if(pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.15));
+      };
+      olEl.appendChild(div);
+    });
+
+    // Layer factory
+    function makeLayer(items, color, radius, popupFn) {
+      const lg = L.layerGroup();
+      items.forEach(item => {
+        if(!item.lat || !item.lng) return;
+        const r = typeof radius === 'function' ? radius(item) : radius;
+        const m = L.circleMarker([item.lat, item.lng], {
+          radius: r, fillColor: color, color: color, weight: 1.2, opacity: 0.85, fillOpacity: 0.5
+        });
+        m.bindPopup(popupFn(item), { maxWidth: 300 });
+        m._searchText = [item.name, item.address, item.city, item.city_state, item.state, item.owner].filter(Boolean).join(' ').toLowerCase();
+        allMarkers.push({ marker: m, layerKey: null, item });
+        lg.addLayer(m);
+      });
+      return lg;
+    }
+
+    layers.buddys = makeLayer(buddys, '#e74c3c', 7, b => 
+      `<div class="popup-title">${b.name || 'Store #' + b.store_num}</div>` +
+      `<div class="popup-addr">${b.address}</div>` +
+      (b.owner ? `<div style="font-size:12px;margin-bottom:4px">Owner: <strong>${b.owner}</strong></div>` : '') +
+      `<div class="popup-stats">` +
+      `<div class="popup-stat"><b>${(b.customers||0).toLocaleString()}</b> customers</div>` +
+      `<div class="popup-stat"><b>$${Math.round(b.revenue||0).toLocaleString()}</b> revenue</div>` +
+      `</div>` +
+      `<div class="popup-tag" style="background:rgba(231,76,60,0.25);color:#e74c3c">Buddy's Home Furnishings</div>`
+    );
+
+    layers.standard = makeLayer(standard, '#3498db', 
+      s => Math.max(5, Math.min(16, Math.sqrt(s.units||0) * 0.8)),
+      s => `<div class="popup-title">${s.name}</div>` +
+      `<div class="popup-addr">${s.address}, ${s.city_state} ${s.zip}</div>` +
+      `<div class="popup-stats">` +
+      `<div class="popup-stat"><b>${(s.units||0).toLocaleString()}</b> units</div>` +
+      `<div class="popup-stat"><b>${s.tenancy||'—'}</b></div>` +
+      `<div class="popup-stat"><b>${s.deal_type||'—'}</b></div>` +
+      `<div class="popup-stat"><b>${s.year_built||'—'}</b> built</div>` +
+      `</div>` +
+      `<div class="popup-tag" style="background:rgba(52,152,219,0.25);color:#3498db">Standard Communities</div>`
+    );
+
+    // Create a layer for each brand dynamically
+    brandNames.forEach(b => {
+      const key = 'brand_' + b.replace(/[^a-zA-Z0-9]/g, '_');
+      const color = brandColor[b];
+      const rgb = parseInt(color.slice(1), 16);
+      const r = (rgb >> 16) & 255, g = (rgb >> 8) & 255, bl = rgb & 255;
+      layers[key] = makeLayer(brandMap[b], color, b === "Aaron's" || b === 'Rent-A-Center' ? 4 : 5, c =>
+        `<div class="popup-title">${c.name}</div>` +
+        `<div class="popup-addr">${c.address}</div>` +
+        (c.rating ? `<div style="font-size:12px">Rating: <strong style="color:var(--accent)">${c.rating}</strong>/5</div>` : '') +
+        `<div class="popup-tag" style="background:rgba(${r},${g},${bl},0.25);color:${color}">${b}</div>`
+      );
+    });
+
+    // Add visible layers (portfolio on top, smaller brands first)
+    [...brandNames].reverse().forEach(b => {
+      const key = 'brand_' + b.replace(/[^a-zA-Z0-9]/g, '_');
+      if(layerVisible[key]) layers[key].addTo(map);
+    });
+    ['standard', 'buddys'].forEach(k => {
+      if(layerVisible[k]) layers[k].addTo(map);
+    });
+
+    // Toggle handlers
+    document.querySelectorAll('.toggle').forEach(el => {
+      el.addEventListener('click', () => {
+        const layer = el.dataset.layer;
+        layerVisible[layer] = !layerVisible[layer];
+        el.classList.toggle('off');
+        if(layerVisible[layer]) layers[layer].addTo(map);
+        else map.removeLayer(layers[layer]);
+      });
+    });
+
+    // Search
+    let searchTimeout;
+    document.getElementById('search').addEventListener('input', e => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        const q = e.target.value.toLowerCase().trim();
+        if(!q) { map.setView([34.5,-90], 5); return; }
+        const matches = allMarkers.filter(m => m.marker._searchText && m.marker._searchText.includes(q));
+        if(matches.length === 1) {
+          map.setView(matches[0].marker.getLatLng(), 13);
+          matches[0].marker.openPopup();
+        } else if(matches.length > 0 && matches.length < 500) {
+          const bounds = L.latLngBounds(matches.map(m => m.marker.getLatLng()));
+          map.fitBounds(bounds.pad(0.1));
+        }
+      }, 300);
+    });
+  });
+</script>
+</body>
+</html>
